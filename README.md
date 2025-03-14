@@ -87,7 +87,7 @@ in
 
 W wyniku kwerendy otrzymujemy tabelę z danymi o dywidendach dla spółek za 2024 rok, gotową do dalszej analizy i raportowania.
 
-![Dywidendy_2024](assets/Dywidendy_2024.png)
+![Dywidendy_2024](assets/dywidendy_2024.png)
 
 
 ## Krok 2: kwerenda obejmująca okres od roku 2000 do roku poprzedzającego aktualny rok
@@ -135,4 +135,4 @@ in
     #"Changed Type"
 ```
 
-![Dywidendy_2024](assets/Dywidendy.png)
+![Dywidendy_2024](assets/dywidendy.png)
