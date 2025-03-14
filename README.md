@@ -8,7 +8,7 @@ Skoroszyt gromadzi informacje o spółkach notowanych na warszawskiej giełdzie 
 
 ## Krok 1: kwerenda z roku 2024
 
-Kwerenda Dywidendy_2024 służy do pobierania i przetwarzania danych o dywidendach z roku 2015. Proces przetwarzania danych obejmuje następujące kroki:
+Kwerenda Dywidendy_2024 służy do pobierania i przetwarzania danych o dywidendach z roku 2024. Proces przetwarzania danych obejmuje następujące kroki:
 
 **1. Pobranie zawartości strony.**
 
@@ -30,7 +30,7 @@ Kwerenda Dywidendy_2024 służy do pobierania i przetwarzania danych o dywidenda
 ```m
 let
     // Pobranie zawartości strony internetowej
-    Source = Web.BrowserContents("https://strefainwestorow.pl/dane/dywidendy/2015"),
+    Source = Web.BrowserContents("https://strefainwestorow.pl/dane/dywidendy/2024"),
 
     // Wydobycie danych z tabeli HTML
     #"Extracted Table From Html" = Html.Table(Source, 
@@ -45,12 +45,10 @@ let
         },
         [RowSelector="TABLE.table.d-none.d-lg-table.table-dividends-desktop.responsive-enabled.table-hover.table-striped > * > TR"]
     ),
-
-    // Promowanie pierwszego wiersza na nagłówki kolumn
-    #"Promoted Headers" = Table.PromoteHeaders(#"Extracted Table From Html", [PromoteAllScalars=true]),
-
+    #"Renamed Columns" = Table.RenameColumns(#"Extracted Table From Html",{{"Column1", "Spółka"}, {"Column2", "Ticker"}, {"Column3", "Nazwa"}, {"Column4", "Dzień dywidendy"}, {"Column5", "Stopa dywidendy"}, {"Column6", "Dywidenda na akcję"}, {"Column7", "Dzień wypłaty dywidendy"}}),
+    #"Filtered Rows" = Table.SelectRows(#"Renamed Columns", each ([Spółka] <> "Spółka")),
     // Zmiana kropki na przecinek w kolumnach "Stopa dywidendy" i "Dywidenda na akcję"
-    #"Replaced Value" = Table.ReplaceValue(#"Promoted Headers", ".", ",", Replacer.ReplaceText, {"Stopa dywidendy", "Dywidenda na akcję"}),
+    #"Replaced Value" = Table.ReplaceValue(#"Filtered Rows", ".", ",", Replacer.ReplaceText, {"Stopa dywidendy", "Dywidenda na akcję"}),
 
     // Usuwanie znaków "*" w kolumnach "Stopa dywidendy", "Dywidenda na akcję" i "Dzień wypłaty dywidendy"
     #"Replaced Value1" = Table.ReplaceValue(#"Replaced Value", "*", "", Replacer.ReplaceText, {"Stopa dywidendy", "Dywidenda na akcję", "Dzień wypłaty dywidendy"}),
@@ -81,7 +79,6 @@ let
 
 in
     #"Reordered Columns"
-
 ```
 
 
@@ -90,7 +87,7 @@ W wyniku kwerendy otrzymujemy tabelę z danymi o dywidendach dla spółek za 202
 ![Dywidendy_2024](assets/dywidendy_2024.png)
 
 
-## Krok 2: kwerenda obejmująca okres od roku 2000 do roku poprzedzającego aktualny rok
+## Krok 2: kwerenda obejmująca okres od roku 2000 do aktualnego roku 
 
 
 Aby zebrać dane z kilku stron została zdefiniowana funkcja fxDywidendy, a następnie z jej użyciem utworzona kwerenda z danych z całego wskazanego okresu.
@@ -110,18 +107,18 @@ let
 
 **2. Kwerenda:**
 
-- Tworzy listę lat ze wskazanego zakresu, generuje liczby od 2000 do poprzedniego roku (np. w 2025 roku: od 2000 do 2024).
+- Tworzy listę lat ze wskazanego zakresu, generuje liczby od 2000 do aktualnego roku (np. w 2025 roku: od 2000 do 2025).
 
 - Dla każdego roku wykonuje następujące operacje:
 Konwertuje liczbę na tekst (Text.From(_)) i przypisuje do kolumny "Rok".
 - Wywołuje funkcję fxDywidendy(Rok), która zwraca tabelę z danymi dywidend dla danego roku i przypisuje wynik do kolumny "Tabele".
 - Konwersja do tabeli: Table.FromRecords(Source) 
 
-W wyniku działania tej kwerendy otrzymana zostaje jedna tabela z danymi dywidend dla wszystkich lat od 2000 do roku poprzedzającego bieżący, gotową do dalszej analizy.
+W wyniku działania tej kwerendy otrzymana zostaje jedna tabela z danymi dywidend dla wszystkich lat od 2000 do roku bieżącego, gotową do dalszej analizy.
 
 ```m
 let
-    Source = List.Transform({2000..Date.Year(DateTime.LocalNow())-1}, 
+    Source = List.Transform({2000..Date.Year(DateTime.LocalNow())}, 
         each [ Rok = _, Tabele = fxDywidendy(_) ]  
         // Przekazujemy liczbę do funkcji
     ),
