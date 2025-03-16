@@ -133,3 +133,56 @@ in
 ```
 
 ![Dywidendy_2024](assets/dywidendy.png)
+
+## Krok 3: Czyszczenie danych
+Pobrane dane są w dobrym stanie, dlatego tylko drobne poprawki były wymagane.
+
+- Na samym początku dane uzyskane w poprzednim kroku są kopiowane do nowego arkusza "Dane", żeby nie zostały nadpisane przy odświeżaniu kwerendy
+
+- Typy danych zostały przypisane poprawnie już na etapie Power Query
+
+- Część danych z aktualnego roku nie jest jeszcze pewna, brak jest daty wypłacania dywidendy czy też jej wysokość, dlatego najrozsądniej będzie pominąć cały rok przy wstępnej analizie spółek. Dane choć jeszcze niepełne będzie można użyć na późniejszym etapie analizy dlatego zostają w tabeli
+
+- Części wpisów brakuje nazwy spółki, ale jest to łatwe do naprawienia
+
+## Krok 4: Wstępne zwizualizowanie stopy dywidendy
+W celu sprawdzenia jak na przestrzeni lat zmeniały się stopy dywidend dla poszczególnych spółek należy zbudować tabelę przestawną. Tego typu tabela pomoże zobrazować dane w sposób, który umożliwia łatwą analizę trendów i porównań między spółkami oraz latami.
+1. W obszarze wierszy wybrano "Ticker" (spółkę).
+2. W obszarze kolumn wybrano "Rok".
+3. W obszarze wartości wybrano "Stopa dywidendy", ustawiając suma jako funkcję agregującą.
+
+![Historia_Dywidend](assets/historia_dywidend.png)
+
+Tabela może się przydać na późniejszym etapie analizy.
+
+## Krok 5: Przygotowanie wskaźników
+
+Aby dobrać najlepsze spółki dywidendowe przygotowane zostaną wskaźniki, które odnosząc się do danych historycznych pozwolą znaleźć spółki stabilne pod względem częstotliwości wypłaty oraz jakości wypłaty(stabilność stopy dywidendy)
+
+Poniżej wskaźniki, które zostaną przygotowane dla każdej spółki. Każdy wskaźnik ma przypisaną wagę, która będzie brana pod uwage podczas analizy.
+
+Ocena spółek dywidendowych – zestaw parametrów i ich wagi:
+
+1. Regularność wypłaty dywidendy (Stabilność historyczna)
+
+- ilość dywidend z ostatnich 15 lat ➝ Waga: 10
+- ilość dywidend z ostatnich 10 lat ➝ Waga: 9
+- ilość dywidend z ostatnich 5 lat ➝ Waga: 8
+- brak dywidendy w ostatnim roku, ale w 9 poprzednich latach była ➝ Waga: 6
+- dywidenda w ostatnim i poprzednim roku ➝ Waga: 7
+- Dywidenda w ostatnim roku, ale wcześniej nieregularna ➝ Waga: 5
+- Ilość lat z dywidendą w całym zbiorze ➝ Waga: 6
+- Ilość lat z dywidendą w ostatnich 5 latach ➝ Waga: 7
+- Lata bez dywidendy (np. 3 lata przerwy w ostatnich 10) ➝ Waga: 5
+
+2. Jakość dywidendy (Wzrost i stabilność stopy)
+
+- Suma stopy dywidendy z ostatnich 5 lat ➝ Waga: 7
+- Średnia stopa dywidendy z 5 lat ➝ Waga: 7
+- Czy stopa dywidendy w ostatnim roku jest większa niż średnia z 5 lat? (Stabilność i wzrost) ➝ Waga: 8
+- Najwyższa i najniższa stopa dywidendy w ostatnich 10 latach (Czy firma trzyma poziom, czy są duże wahania?) ➝ Waga: 6
+- Trend stopy dywidendy (rosnąca, spadająca, stabilna) ➝ Waga: 8
+- CAGR dywidendy (średnioroczny wzrost dywidendy w %) ➝ Waga: 9
+
+
+
