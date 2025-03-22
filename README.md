@@ -153,36 +153,181 @@ W celu sprawdzenia jak na przestrzeni lat zmeniały się stopy dywidend dla posz
 
 ![Historia_Dywidend](assets/historia_dywidend.png)
 
-Tabela może się przydać na późniejszym etapie analizy.
+Tabela może się przydać przy weryfikowaniu poprawności wyliczonych wskaźników.
 
 ## Krok 5: Przygotowanie wskaźników
 
-Aby dobrać najlepsze spółki dywidendowe przygotowane zostaną wskaźniki, które odnosząc się do danych historycznych pozwolą znaleźć spółki stabilne pod względem częstotliwości wypłaty oraz jakości wypłaty(stabilność stopy dywidendy)
+Aby dobrać najlepsze spółki dywidendowe przygotowane zostaną wskaźniki, które odnosząc się do danych historycznych pozwolą znaleźć spółki stabilne pod względem częstotliwości wypłaty oraz jakości wypłaty(stabilność stopy dywidendy). Wskaźniki uzyskane zostaną przy pomocy Power Query w dwóch zapytaniach na podstawie uzyskanych danych z poprzednich kroków:
+- Wskaźniki_regularności
+- Wskaźniki_jakości
 
-Poniżej wskaźniki, które zostaną przygotowane dla każdej spółki. Każdy wskaźnik ma przypisaną wagę, która będzie brana pod uwage podczas analizy.
+ Każdy wskaźnik ma przypisaną wagę, która będzie brana pod uwage podczas analizy.
 
-Ocena spółek dywidendowych – zestaw parametrów i ich wagi:
+### Krok 5.1 Wskaźniki regularności wypłaty dywidendy (Stabilność historyczna) 
 
-1. Regularność wypłaty dywidendy (Stabilność historyczna)
-
+W zapytaniu Wskaźniki_regularności przygotowano parametry:
 - ilość dywidend z ostatnich 15 lat ➝ Waga: 10
-- ilość dywidend z ostatnich 10 lat ➝ Waga: 9
-- ilość dywidend z ostatnich 5 lat ➝ Waga: 8
+- ilość dywidend z ostatnich 10 lat ➝ Waga: 8
+- ilość dywidend z ostatnich 5 lat ➝ Waga: 7
 - brak dywidendy w ostatnim roku, ale w 9 poprzednich latach była ➝ Waga: 6
 - dywidenda w ostatnim i poprzednim roku ➝ Waga: 7
-- Dywidenda w ostatnim roku, ale wcześniej nieregularna ➝ Waga: 5
+- Dywidenda w ostatnim roku ➝ Waga: 4
 - Ilość lat z dywidendą w całym zbiorze ➝ Waga: 6
 - Ilość lat z dywidendą w ostatnich 5 latach ➝ Waga: 7
-- Lata bez dywidendy (np. 3 lata przerwy w ostatnich 10) ➝ Waga: 5
+- Ilość lat bez dywidendy w ostatnich 10 latach ➝ Waga: 5
 
-2. Jakość dywidendy (Wzrost i stabilność stopy)
+Całe zapytanie do obliczenia powyższych parametrów:
+```m
+let
+    Source = Dywidendy_źródło,
+    // Pobranie tylko kolumn "Rok" i "Ticker", usunięcie duplikatów
+    Unikalne_dane = Table.Distinct(Table.SelectColumns(Source,{"Rok", "Ticker"})),
 
-- Suma stopy dywidendy z ostatnich 5 lat ➝ Waga: 7
-- Średnia stopa dywidendy z 5 lat ➝ Waga: 7
+    // Funkcja zwracająca listę lat, 
+    Aktualny_rok = Date.Year(DateTime.LocalNow()),
+    Ciągłość_Dywidend = (Lata as number, ListaLatDywidend as list) => 
+        List.Count(List.Difference(List.Numbers(Aktualny_rok-Lata, Lata), List.Distinct(ListaLatDywidend))),
+
+    // Sprawdzenie Regularności wypłaty dywidendy
+    Wskazniki_regularności = Table.Group(Unikalne_dane,"Ticker", {  
+        {"Ciągłość_Dywidend_15_Lat",each Ciągłość_Dywidend(15,[Rok]) = 0, type logical},
+        {"Ciągłość_Dywidend_10_Lat",each Ciągłość_Dywidend(10,[Rok]) = 0, type logical},
+        {"Ciągłość_Dywidend_5_Lat",each Ciągłość_Dywidend(5,[Rok]) = 0, type logical},
+        {"Ciągłość_dywidend_5_Lat_z_przerwą_w_ostatnim_roku", each 
+            let 
+                brakDywidendyOstatni = List.Contains([Rok], Aktualny_rok - 1) = false,
+                lataBezDywidendy = Ciągłość_Dywidend(10,[Rok]) = 1
+            in 
+                brakDywidendyOstatni and lataBezDywidendy},
+        {"Ciągłość_Dywidend_2_lata", each Ciągłość_Dywidend(2,[Rok]) = 0, type logical},
+        {"Dywidenda_w_Ostatnim_Roku", each List.Contains([Rok],Aktualny_rok - 1), type logical},
+        {"Ilość_Dywidend_w_Całym_Zbiorze", each List.Count([Rok])},
+        {"Ilość_Dywidend_w_Ostatnich_5_Latach", each 5 - Ciągłość_Dywidend(5,[Rok])},
+        {"Ilość_lat_bez_dywidendy_w_ostatnich_10_latach", each Ciągłość_Dywidend(10,[Rok])}
+        }),
+
+    Posortowane_wyniki = Table.Sort(Wskazniki_regularności,{{"Ticker", Order.Ascending}})
+in
+    Posortowane_wyniki
+```
+
+Opis jednego z parametrów (pozostałe obliczane są w analogiczny sposób):
+
+- Ze względu na powtarzalność obliczeń, stworzono funkcję Ciągłość_Dywidend, która zwraca liczbę lat, w których dywidenda nie była wypłacona w analizowanym okresie. Porównuje ona oczekiwane lata wypłaty dywidendy z latami, w których faktycznie została wypłacona.
+```m
+Ciągłość_Dywidend = (Lata as number, ListaLatDywidend as list) => 
+    List.Count(List.Difference(List.Numbers(Aktualny_rok-Lata, Lata), List.Distinct(ListaLatDywidend))),
+```
+- Dane są grupowane według Tickera, a następnie dla każdego z nich obliczane są odpowiednie wskaźniki, które zapisywane są w nowych kolumnach. Przykładowo, wskaźnik Ciągłość_Dywidend_15_Lat sprawdza, czy dywidenda była wypłacana nieprzerwanie przez ostatnie 15 lat (licząc od roku poprzedniego).
+```
+...
+Wskazniki_regularności = Table.Group(Unikalne_dane,"Ticker", {
+        {"Ciągłość_Dywidend_15_Lat",each Ciągłość_Dywidend(15,[Rok]) = 0, type logical},
+...
+```
+Dzięki temu podejściu funkcja może być wielokrotnie wykorzystywana do obliczania wskaźników dla różnych przedziałów czasowych.
+
+
+### Krok 5.2 Wskaźniki jakości dywidendy (Wzrost i stabilność stopy)
+
+Wskaźniki jakości dywidendy (Wzrost i stabilność stopy) są liczone na podstawie ostatnich 5 lat.
+
+- Suma stopy dywidendy z ostatnich 5 lat ➝ Waga: 6
+- Średnia stopa dywidendy z 5 lat ➝ Waga: 6
 - Czy stopa dywidendy w ostatnim roku jest większa niż średnia z 5 lat? (Stabilność i wzrost) ➝ Waga: 8
-- Najwyższa i najniższa stopa dywidendy w ostatnich 10 latach (Czy firma trzyma poziom, czy są duże wahania?) ➝ Waga: 6
-- Trend stopy dywidendy (rosnąca, spadająca, stabilna) ➝ Waga: 8
-- CAGR dywidendy (średnioroczny wzrost dywidendy w %) ➝ Waga: 9
+- Najwyższa i najniższa stopa dywidendy w ostatnich 5 latach ➝ Waga: 5
+- CAGR dywidendy z ostatnich 5 lat (średnioroczny wzrost dywidendy w %) ➝ Waga: 9
 
+```
+let
+    // Źródło danych o dywidendach
+    Source = Dywidendy_źródło,
 
+    // Grupowanie danych po kolumnie "Ticker" i "Rok", z obliczeniem sumy stopy dywidendy dla danego roku
+    Grupa_danych_dla_roku_i_tikera = Table.Group(Source, {"Ticker", "Rok"}, {{"Roczna Stopa dywidendy", each List.Sum([Stopa dywidendy]), Percentage.Type}}),
 
+    // Odfiltrowanie danych dla ostatnich 5 lat
+    Dane_za_ostatnie_5_lat = Table.SelectRows(Grupa_danych_dla_roku_i_tikera, each List.Contains(List.Numbers(Date.Year(DateTime.LocalNow()) - 5, 5), [Rok])),
+
+    // Obliczenie wskaźników - Suma, Średnia, Min i Max stopy dywidendy z ostatnich 5 lat
+    Wskaźniki_Suma_i_Średnia_5_lat = 
+        Table.Group(
+            Dane_za_ostatnie_5_lat,
+            "Ticker",
+            {
+                {"Suma stopy dywidendy z ostatnich 5 lat", each List.Sum([Roczna Stopa dywidendy]), Percentage.Type},
+                {"Średnia stopy dywidendy z ostatnich 5 lat", each List.Average([Roczna Stopa dywidendy]), Percentage.Type},
+                {"Minimalna stopa dywidendy z ostatnich 5 lat", each List.Min([Roczna Stopa dywidendy]), Percentage.Type},
+                {"Maksymalna stopa dywidendy z ostatnich 5 lat", each List.Max([Roczna Stopa dywidendy]), Percentage.Type}
+            }
+        ),
+
+    // Obliczanie różnicy między maksymalną a minimalną stopą dywidendy
+    Tabela_z_Obliczeniem_różnicy_max_min = Table.AddColumn(Wskaźniki_Suma_i_Średnia_5_lat, "Różnica między maksymalną a minimalną stopą dywidendy", each [Maksymalna stopa dywidendy z ostatnich 5 lat] - [Minimalna stopa dywidendy z ostatnich 5 lat], Percentage.Type),
+
+    // Obliczenie stopy dywidendy za ostatni rok
+    Dane_dla_ostatniego_roku_temp = Table.SelectRows(Grupa_danych_dla_roku_i_tikera, each [Rok] = Date.Year(DateTime.LocalNow()) - 1),
+    // Usuwanie kolumny "Rok" (niepotrzebna)
+    Dane_dla_ostatniego_roku = Table.RemoveColumns(Dane_dla_ostatniego_roku_temp, {"Rok"}),  
+
+    // Łączenie wskaźników z danymi za ostatni rok
+    Wskaźniki_z_ostatnim_rokiem = Table.NestedJoin(Tabela_z_Obliczeniem_różnicy_max_min, "Ticker", Dane_dla_ostatniego_roku, "Ticker", "Stopa ostatni rok", JoinKind.FullOuter),
+    // Rozwijanie tabeli, aby dodać dane o stopie dywidendy za ostatni rok
+    Tabela_rozwinięta_z_ostatnim_rokiem = Table.ExpandTableColumn(Wskaźniki_z_ostatnim_rokiem, "Stopa ostatni rok", {"Roczna Stopa dywidendy"}),
+
+    // Dodanie kolumny porównującej stopę dywidendy za ostatni rok z średnią z ostatnich 5 lat
+    Tabela_Porównanie_stopy_dywidendy = Table.AddColumn(Tabela_rozwinięta_z_ostatnim_rokiem, "Czy stopa dywidendy w ostatnim roku jest większa niż średnia z 5 lat?", each [Roczna Stopa dywidendy] > [Średnia stopy dywidendy z ostatnich 5 lat], type logical),
+
+    Dane_posortowane = Table.Sort(Dane_za_ostatnie_5_lat, {{"Rok", Order.Ascending}}),
+
+    // Uzyskiwanie pierwszej i ostatniej stopy dywidendy dla każdej spółki z zakresu 5 ostatnich lat
+    Stopa_początkowa_i_końcowa = 
+        Table.Group(
+            Dane_za_ostatnie_5_lat,
+            "Ticker",
+            {
+                // Pobieramy pierwszy wiersz (najstarszy rok) i wyciągamy z niego wartość dywidendy
+                {"Stopa początkowa wartość", each 
+                    let 
+                        Posortowane = Table.Sort(_, {{"Rok", Order.Ascending}})
+                    in 
+                        Posortowane[Roczna Stopa dywidendy]{0}, 
+                    Percentage.Type
+                },
+
+                // Pobieramy ostatni wiersz (najnowszy rok) i wyciągamy z niego wartość dywidendy
+                {"Stopa końcowa wartość", each 
+                    let 
+                        Posortowane = Table.Sort(_, {{"Rok", Order.Descending}})
+                    in 
+                        Posortowane[Roczna Stopa dywidendy]{0}, 
+                    Percentage.Type
+                }
+            }
+        ),
+
+    // Dodanie kolumny CAGR
+    Tabela_z_CAGR = Table.AddColumn(
+        Stopa_początkowa_i_końcowa, 
+        "CAGR z 5 lat", 
+        each 
+            let
+                początkowa = [Stopa początkowa wartość], // Stopa dywidendy na początku okresu
+                końcowa = [Stopa końcowa wartość], // Stopa dywidendy na końcu okresu
+                lata = 5 // Przyjmujemy 5 lat, ale można dostosować
+            in
+                if początkowa > 0 and końcowa > 0 then
+                    Number.Power((końcowa / początkowa), (1 / lata)) - 1
+                else 
+                    null,
+        Percentage.Type
+    ),
+
+    Tabela_ze_wskaźnikami = Table.NestedJoin(Tabela_Porównanie_stopy_dywidendy,"Ticker",Tabela_z_CAGR,"Ticker","CAGR", JoinKind.FullOuter),
+    Rozwinięta_Tabela_ze_wskaźnikami = Table.ExpandTableColumn(Tabela_ze_wskaźnikami,"CAGR",{"CAGR z 5 lat"}),
+
+    // Sortowanie wyników po Tickerze
+    Posortowane_wyniki = Table.Sort(Rozwinięta_Tabela_ze_wskaźnikami, {{"Ticker", Order.Ascending}})
+in
+    Posortowane_wyniki
+```
