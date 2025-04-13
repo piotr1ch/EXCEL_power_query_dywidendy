@@ -193,7 +193,7 @@ let
         {"Ciągłość_Dywidend_15_Lat",each Ciągłość_Dywidend(15,[Rok]) = 0, type logical},
         {"Ciągłość_Dywidend_10_Lat",each Ciągłość_Dywidend(10,[Rok]) = 0, type logical},
         {"Ciągłość_Dywidend_5_Lat",each Ciągłość_Dywidend(5,[Rok]) = 0, type logical},
-        {"Ciągłość_dywidend_5_Lat_z_przerwą_w_ostatnim_roku", each 
+        {"Ciągłość_dywidend_10_Lat_z_przerwą_w_ostatnim_roku", each 
             let 
                 brakDywidendyOstatni = List.Contains([Rok], Aktualny_rok - 1) = false,
                 lataBezDywidendy = Ciągłość_Dywidend(10,[Rok]) = 1
@@ -230,7 +230,7 @@ Dzięki temu podejściu funkcja może być wielokrotnie wykorzystywana do oblicz
 
 ### Krok 5.2 Wskaźniki jakości dywidendy (Wzrost i stabilność stopy)
 
-Wskaźniki jakości dywidendy (Wzrost i stabilność stopy) są liczone na podstawie ostatnich 5 lat.
+Wskaźniki jakości dywidendy, takie jak wzrost i stabilność stopy dywidendy, zostały obliczone na podstawie danych z ostatnich 5 lat. Ze względu na złożoność zagadnienia oraz fakt, że dopiero uczę się zaawansowanej analizy danych, w procesie skorzystano ze wsparcia modelu językowego ChatGPT.
 
 - Suma stopy dywidendy z ostatnich 5 lat ➝ Waga: 6
 - Średnia stopa dywidendy z 5 lat ➝ Waga: 6
@@ -238,16 +238,27 @@ Wskaźniki jakości dywidendy (Wzrost i stabilność stopy) są liczone na podst
 - Najwyższa i najniższa stopa dywidendy w ostatnich 5 latach ➝ Waga: 5
 - CAGR dywidendy z ostatnich 5 lat (średnioroczny wzrost dywidendy w %) ➝ Waga: 9
 
-```
+```m
 let
     // Źródło danych o dywidendach
     Source = Dywidendy_źródło,
 
     // Grupowanie danych po kolumnie "Ticker" i "Rok", z obliczeniem sumy stopy dywidendy dla danego roku
-    Grupa_danych_dla_roku_i_tikera = Table.Group(Source, {"Ticker", "Rok"}, {{"Roczna Stopa dywidendy", each List.Sum([Stopa dywidendy]), Percentage.Type}}),
+    Grupa_danych_dla_roku_i_tikera = 
+        Table.Group(
+            Source, 
+            {"Ticker", "Rok"}, 
+            {
+                {"Roczna Stopa dywidendy", each List.Sum([Stopa dywidendy]), Percentage.Type}
+            }
+        ),
 
     // Odfiltrowanie danych dla ostatnich 5 lat
-    Dane_za_ostatnie_5_lat = Table.SelectRows(Grupa_danych_dla_roku_i_tikera, each List.Contains(List.Numbers(Date.Year(DateTime.LocalNow()) - 5, 5), [Rok])),
+    Dane_za_ostatnie_5_lat = 
+        Table.SelectRows(
+            Grupa_danych_dla_roku_i_tikera, 
+            each List.Contains(List.Numbers(Date.Year(DateTime.LocalNow()) - 5, 5), [Rok])
+        ),
 
     // Obliczenie wskaźników - Suma, Średnia, Min i Max stopy dywidendy z ostatnich 5 lat
     Wskaźniki_Suma_i_Średnia_5_lat = 
@@ -263,22 +274,49 @@ let
         ),
 
     // Obliczanie różnicy między maksymalną a minimalną stopą dywidendy
-    Tabela_z_Obliczeniem_różnicy_max_min = Table.AddColumn(Wskaźniki_Suma_i_Średnia_5_lat, "Różnica między maksymalną a minimalną stopą dywidendy", each [Maksymalna stopa dywidendy z ostatnich 5 lat] - [Minimalna stopa dywidendy z ostatnich 5 lat], Percentage.Type),
+    Tabela_z_Obliczeniem_różnicy_max_min = 
+        Table.AddColumn(
+            Wskaźniki_Suma_i_Średnia_5_lat, 
+            "Różnica między maksymalną a minimalną stopą dywidendy", 
+            each [Maksymalna stopa dywidendy z ostatnich 5 lat] - [Minimalna stopa dywidendy z ostatnich 5 lat], 
+            Percentage.Type
+        ),
 
     // Obliczenie stopy dywidendy za ostatni rok
-    Dane_dla_ostatniego_roku_temp = Table.SelectRows(Grupa_danych_dla_roku_i_tikera, each [Rok] = Date.Year(DateTime.LocalNow()) - 1),
+    Dane_dla_ostatniego_roku_temp = 
+        Table.SelectRows(Grupa_danych_dla_roku_i_tikera, each [Rok] = Date.Year(DateTime.LocalNow()) - 1),
+
     // Usuwanie kolumny "Rok" (niepotrzebna)
-    Dane_dla_ostatniego_roku = Table.RemoveColumns(Dane_dla_ostatniego_roku_temp, {"Rok"}),  
+    Dane_dla_ostatniego_roku = 
+        Table.RemoveColumns(Dane_dla_ostatniego_roku_temp, {"Rok"}),  
 
     // Łączenie wskaźników z danymi za ostatni rok
-    Wskaźniki_z_ostatnim_rokiem = Table.NestedJoin(Tabela_z_Obliczeniem_różnicy_max_min, "Ticker", Dane_dla_ostatniego_roku, "Ticker", "Stopa ostatni rok", JoinKind.FullOuter),
+    Wskaźniki_z_ostatnim_rokiem = 
+        Table.NestedJoin(
+            Tabela_z_Obliczeniem_różnicy_max_min, 
+            "Ticker", 
+            Dane_dla_ostatniego_roku, 
+            "Ticker", 
+            "Stopa ostatni rok", 
+            JoinKind.FullOuter
+        ),
+
     // Rozwijanie tabeli, aby dodać dane o stopie dywidendy za ostatni rok
-    Tabela_rozwinięta_z_ostatnim_rokiem = Table.ExpandTableColumn(Wskaźniki_z_ostatnim_rokiem, "Stopa ostatni rok", {"Roczna Stopa dywidendy"}),
+    Tabela_rozwinięta_z_ostatnim_rokiem = 
+        Table.ExpandTableColumn(
+            Wskaźniki_z_ostatnim_rokiem, 
+            "Stopa ostatni rok", 
+            {"Roczna Stopa dywidendy"}
+        ),
 
     // Dodanie kolumny porównującej stopę dywidendy za ostatni rok z średnią z ostatnich 5 lat
-    Tabela_Porównanie_stopy_dywidendy = Table.AddColumn(Tabela_rozwinięta_z_ostatnim_rokiem, "Czy stopa dywidendy w ostatnim roku jest większa niż średnia z 5 lat?", each [Roczna Stopa dywidendy] > [Średnia stopy dywidendy z ostatnich 5 lat], type logical),
-
-    Dane_posortowane = Table.Sort(Dane_za_ostatnie_5_lat, {{"Rok", Order.Ascending}}),
+    Tabela_Porównanie_stopy_dywidendy = 
+        Table.AddColumn(
+            Tabela_rozwinięta_z_ostatnim_rokiem, 
+            "Czy stopa dywidendy w ostatnim roku jest większa niż średnia z 5 lat?", 
+            each [Roczna Stopa dywidendy] > [Średnia stopy dywidendy z ostatnich 5 lat], 
+            type logical
+        ),
 
     // Uzyskiwanie pierwszej i ostatniej stopy dywidendy dla każdej spółki z zakresu 5 ostatnich lat
     Stopa_początkowa_i_końcowa = 
@@ -286,48 +324,146 @@ let
             Dane_za_ostatnie_5_lat,
             "Ticker",
             {
-                // Pobieramy pierwszy wiersz (najstarszy rok) i wyciągamy z niego wartość dywidendy
-                {"Stopa początkowa wartość", each 
-                    let 
-                        Posortowane = Table.Sort(_, {{"Rok", Order.Ascending}})
-                    in 
-                        Posortowane[Roczna Stopa dywidendy]{0}, 
+                {
+                    "Stopa początkowa wartość", 
+                    each 
+                        let 
+                            Posortowane = Table.Sort(_, {{"Rok", Order.Ascending}})
+                        in 
+                            Posortowane[Roczna Stopa dywidendy]{0}, 
                     Percentage.Type
                 },
-
-                // Pobieramy ostatni wiersz (najnowszy rok) i wyciągamy z niego wartość dywidendy
-                {"Stopa końcowa wartość", each 
-                    let 
-                        Posortowane = Table.Sort(_, {{"Rok", Order.Descending}})
-                    in 
-                        Posortowane[Roczna Stopa dywidendy]{0}, 
+                {
+                    "Stopa końcowa wartość", 
+                    each 
+                        let 
+                            Posortowane = Table.Sort(_, {{"Rok", Order.Descending}})
+                        in 
+                            Posortowane[Roczna Stopa dywidendy]{0}, 
                     Percentage.Type
                 }
             }
         ),
 
     // Dodanie kolumny CAGR
-    Tabela_z_CAGR = Table.AddColumn(
-        Stopa_początkowa_i_końcowa, 
-        "CAGR z 5 lat", 
-        each 
-            let
-                początkowa = [Stopa początkowa wartość], // Stopa dywidendy na początku okresu
-                końcowa = [Stopa końcowa wartość], // Stopa dywidendy na końcu okresu
-                lata = 5 // Przyjmujemy 5 lat, ale można dostosować
-            in
-                if początkowa > 0 and końcowa > 0 then
-                    Number.Power((końcowa / początkowa), (1 / lata)) - 1
-                else 
-                    null,
-        Percentage.Type
-    ),
+    Tabela_z_CAGR = 
+        Table.AddColumn(
+            Stopa_początkowa_i_końcowa, 
+            "CAGR z 5 lat", 
+            each 
+                let
+                    początkowa = [Stopa początkowa wartość],
+                    końcowa = [Stopa końcowa wartość],
+                    lata = 5
+                in
+                    if początkowa > 0 and końcowa > 0 then
+                        Number.Power((końcowa / początkowa), (1 / lata)) - 1
+                    else 
+                        null,
+            Percentage.Type
+        ),
 
-    Tabela_ze_wskaźnikami = Table.NestedJoin(Tabela_Porównanie_stopy_dywidendy,"Ticker",Tabela_z_CAGR,"Ticker","CAGR", JoinKind.FullOuter),
-    Rozwinięta_Tabela_ze_wskaźnikami = Table.ExpandTableColumn(Tabela_ze_wskaźnikami,"CAGR",{"CAGR z 5 lat"}),
+    // Połączenie tabel z wynikami CAGR
+    Tabela_ze_wskaźnikami = 
+        Table.NestedJoin(
+            Tabela_Porównanie_stopy_dywidendy, 
+            "Ticker", 
+            Tabela_z_CAGR, 
+            "Ticker", 
+            "CAGR", 
+            JoinKind.FullOuter
+        ),
+
+    Rozwinięta_Tabela_ze_wskaźnikami = 
+        Table.ExpandTableColumn(
+            Tabela_ze_wskaźnikami,
+            "CAGR",
+            {"CAGR z 5 lat"}
+        ),
 
     // Sortowanie wyników po Tickerze
-    Posortowane_wyniki = Table.Sort(Rozwinięta_Tabela_ze_wskaźnikami, {{"Ticker", Order.Ascending}})
+    Posortowane_wyniki = 
+        Table.Sort(
+            Rozwinięta_Tabela_ze_wskaźnikami, 
+            {{"Ticker", Order.Ascending}}
+        )
 in
     Posortowane_wyniki
 ```
+
+## Krok 6: Normalizacja punktacji
+
+Po wyznaczeniu wszystkich wskaźników konieczne jest ich znormalizowanie, czyli przekształcenie do wspólnej skali. Wynika to z faktu, że wskaźniki różnią się między sobą typem danych:
+
+- int (np. Ilość_Dywidend_w_Całym_Zbiorze),
+
+- boolean (np. Ciągłość_Dywidend_15_Lat),
+
+- procent (np. Suma stopy dywidendy z ostatnich 5 lat).
+
+W celu uporządkowania procesu normalizacji, w arkuszu Tabela sterująca przygotowano zestawienie zawierające kluczowe informacje o każdym wskaźniku: jego wagę, typ danych, a także kolumnę "Uwzględniaj", która umożliwia elastyczne decydowanie o tym, czy dany wskaźnik ma zostać uwzględniony w końcowej analizie, czy też pominięty.
+
+![Tabela_Wag](assets/tabela_wagi.png)
+
+Powyższa tabela została wczytana do Power Query pod nazwą Parametry_Punktacji.
+
+
+W celu obliczenia minimum i maksimum dla każdego wskaźnika o typie int oraz procent, potrzebne jest pobranie listy wskaźników z takimi typami danych. Poniżej kwerenda Parametry_scoringu_normalizacja:
+
+```m
+let
+    Source = Parametry_Punktacji,
+    #"Filtered Rows" = Table.SelectRows(Source, each ([Typ danych] <> "boolean")),
+    #"Renamed Columns" = Table.RenameColumns(#"Filtered Rows",{{"Wskaźnik", "Lista kolumn"}}),
+    #"Removed Other Columns" = Table.SelectColumns(#"Renamed Columns",{"Lista kolumn"}),
+    #"Lista kolumn" = #"Removed Other Columns"[Lista kolumn]
+in
+    #"Lista kolumn"
+```
+
+Jej wynikiem jest lista:
+
+![Lista_do_normalizacji](assets/Lista_do_normalizacji.png)
+
+
+
+Poniżej kwerenda "Zakresy_Wskaźników" do wyznaczenia zakresu min-max dla wskaźników do normalizacji:
+
+```m
+let
+    Source = Wszystkie_wskaźniki,
+    Kolumny_do_normalizacji = 
+        Table.SelectColumns(
+            Source, 
+            Parametry_Punktacji_Normalizacja
+        ),
+    Nagłówki_do_wiersza = Table.DemoteHeaders(Kolumny_do_normalizacji),
+    Transpozycja_tabeli = Table.Transpose(Nagłówki_do_wiersza),
+    Zmiana_nazwy_kolumny = Table.RenameColumns(Transpozycja_tabeli,{{"Column1", "Wskaźnik"}}),
+    Wstawienie_minimum = 
+        Table.AddColumn(
+            Zmiana_nazwy_kolumny, 
+            "Minimum", 
+            each List.Min(Record.ToList(Record.RemoveFields(_,{"Wskaźnik"})))),
+    Wstawienie_maximum = 
+        Table.AddColumn(
+            Wstawienie_minimum, 
+            "Maximum", 
+            each List.Max(Record.ToList(Record.RemoveFields(_,{"Wskaźnik"})))),
+    Tabela_min_max = 
+        Table.SelectColumns(
+            Wstawienie_maximum,
+            {"Wskaźnik", "Minimum", "Maximum"}
+        )
+in
+    Tabela_min_max
+```
+
+Wyznaczone wskaźniki o typie danych int oraz procent wraz z wartościami minimalnymi i maksymalnymi:
+
+![Normalizacja_minmax](assets/normalizacja_minmax.png)
+
+
+
+
+## Krok 7: Przygotowanie tabeli punktacji
